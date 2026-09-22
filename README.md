@@ -1,5 +1,7 @@
 # 🏥 API Própria de Cotação de Planos de Saúde (Painel do Corretor)
 
+Para integrar ao ChatGPT como plugin e liberar acesso individual aos vendedores, veja [PLUGIN_SETUP.md](PLUGIN_SETUP.md). O pacote portátil está em [`plugin/`](plugin/).
+
 API REST desenvolvida com **Node.js, Express e Playwright** para automação completa de cotações no sistema **Painel do Corretor** (`beta.paineldocorretor.com.br`), permitindo integração direta com **Chatbots (WhatsApp / Evolution API / Typebot / N8N)**, **CRMs** e sistemas internos da corretora.
 
 ---
@@ -122,9 +124,9 @@ Dispara a cotação no painel e retorna o resultado consolidado e o link do PDF.
   "cotacaoId": "01a0c871-5895-7e0d-9816-ec733d9acf7e",
   "titulo": "Cotação Cliente WhatsApp - Família Silva",
   "corretor": {
-    "nome": "Jefferson Souza",
-    "email": "jefferson@allcc.com.br",
-    "telefone": "(11) 95025-6952"
+    "nome": "Corretor Exemplo",
+    "email": "corretor@example.com",
+    "telefone": "(11) 90000-0000"
   },
   "totalPlanos": 8,
   "planos": [

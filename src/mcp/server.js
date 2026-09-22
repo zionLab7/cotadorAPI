@@ -82,7 +82,7 @@ function createMcpServer() {
   // 3. Tool: cotar_planos
   server.tool(
     'cotar_planos',
-    'Executa a cotação automatizada no Painel do Corretor, seleciona planos e extrai a tabela completa de valores por faixa etária, valor total por plano, acomodação, coparticipação e link para download do PDF oficial.',
+    'Executa a cotação automatizada no Painel do Corretor e retorna valores por faixa, total por plano, acomodação e coparticipação. Retorna o ID do PDF, sem link público.',
     {
       titulo: z.string().optional().describe('Nome identificador da cotação (ex: "Cotação PME - Família Silva")'),
       cidade: z.string().optional().describe('Cidade e UF da cotação (ex: "Guarulhos - SP", "São Paulo - SP")'),
@@ -105,10 +105,6 @@ function createMcpServer() {
           operadoras: args.operadoras
         });
 
-        // Adiciona token ao link do PDF se configurado
-        const tokenQuery = config.API_SECRET_TOKEN ? `?token=${config.API_SECRET_TOKEN}` : '';
-        const pdfLink = `${resultado.pdf.urlDownload}${tokenQuery}`;
-
         return {
           content: [
             {
@@ -119,9 +115,10 @@ function createMcpServer() {
                 titulo: resultado.titulo,
                 totalPlanos: resultado.totalPlanos,
                 planos: resultado.planos,
+                resumoHospitais: resultado.resumoHospitais,
                 pdf: {
-                  arquivo: resultado.pdf.arquivo,
-                  urlDownload: pdfLink
+                  nomeArquivo: resultado.pdf.nomeArquivo,
+                  disponivel: fs.existsSync(resultado.pdf.caminhoLocal)
                 }
               }, null, 2)
             }
@@ -130,7 +127,7 @@ function createMcpServer() {
       } catch (err) {
         return {
           isError: true,
-          content: [{ type: 'text', text: `Erro ao executar cotação: ${err.message}` }]
+          content: [{ type: 'text', text: 'Não foi possível executar a cotação. Consulte os logs do servidor.' }]
         };
       }
     }
@@ -154,7 +151,6 @@ function createMcpServer() {
               text: JSON.stringify({
                 status: 'online',
                 sessaoPainelAtiva: sessionExists,
-                autenticacaoApiAtiva: Boolean(config.API_SECRET_TOKEN),
                 totalOperadoras: Object.keys(catalogo).length,
                 totalPlanos: totalPlanosMapeados
               }, null, 2)

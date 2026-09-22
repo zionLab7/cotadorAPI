@@ -56,14 +56,36 @@ function metadata(req, res) {
   });
 }
 
+// ChatGPT may attach an access token while refreshing tool metadata. Tool
+// discovery is intentionally public: descriptors contain no customer data and
+// must remain available even when a stale/incomplete token is present. Actual
+// execution continues to require a fully valid token below and in the tool
+// handler.
+function isPublicDiscoveryRequest(req) {
+  if (req.method !== 'POST') return true;
+
+  const messages = Array.isArray(req.body) ? req.body : [req.body];
+  const publicMethods = new Set([
+    'initialize',
+    'notifications/initialized',
+    'ping',
+    'tools/list'
+  ]);
+
+  return messages.length > 0 && messages.every(message =>
+    message && publicMethods.has(message.method)
+  );
+}
+
 async function authenticateMcp(req, res, next) {
   if (!oauthConfigured()) return res.status(503).json({ error: 'MCP OAuth não configurado' });
 
   const challenge = authorizationChallenge();
   const bearer = /^Bearer (\S+)$/i.exec(req.headers.authorization || '');
-  // Discovery must remain available before account linking. Individual tools
-  // return an MCP authentication challenge when invoked without credentials.
-  if (!bearer) return next();
+  // Discovery must remain available before and after account linking.
+  // Individual tools return an MCP authentication challenge without a token;
+  // supplied tokens are validated only when a protected operation is called.
+  if (!bearer || isPublicDiscoveryRequest(req)) return next();
 
   try {
     const { createRemoteJWKSet, jwtVerify } = await import('jose');

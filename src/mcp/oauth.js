@@ -3,6 +3,41 @@ const config = require('../config');
 
 let remoteJwks;
 let cachedJwksUri;
+const MCP_SCOPE = 'cotador:use';
+
+function resourceMetadataUrl() {
+  return `${new URL(config.MCP_PUBLIC_URL).origin}/.well-known/oauth-protected-resource`;
+}
+
+function oauthSecuritySchemes() {
+  return [{ type: 'oauth2', scopes: [MCP_SCOPE] }];
+}
+
+function authorizationChallenge(error, errorDescription) {
+  const parts = [
+    `Bearer resource_metadata="${resourceMetadataUrl()}"`,
+    `scope="${MCP_SCOPE}"`
+  ];
+  if (error) parts.push(`error="${error}"`);
+  if (errorDescription) parts.push(`error_description="${errorDescription}"`);
+  return parts.join(', ');
+}
+
+function requireToolAuthentication(extra) {
+  const scopes = extra?.authInfo?.scopes;
+  if (Array.isArray(scopes) && scopes.includes(MCP_SCOPE)) return null;
+
+  return {
+    isError: true,
+    content: [{ type: 'text', text: 'Autenticação necessária para usar esta ferramenta.' }],
+    _meta: {
+      'mcp/www_authenticate': [authorizationChallenge(
+        'insufficient_scope',
+        'Conecte sua conta para continuar.'
+      )]
+    }
+  };
+}
 
 function oauthConfigured() {
   const urls = [config.MCP_PUBLIC_URL, config.MCP_OAUTH_ISSUER, config.MCP_OAUTH_JWKS_URI];
@@ -16,7 +51,7 @@ function metadata(req, res) {
   res.json({
     resource: config.MCP_PUBLIC_URL,
     authorization_servers: [config.MCP_OAUTH_ISSUER],
-    scopes_supported: ['cotador:use'],
+    scopes_supported: [MCP_SCOPE],
     bearer_methods_supported: ['header']
   });
 }
@@ -24,13 +59,11 @@ function metadata(req, res) {
 async function authenticateMcp(req, res, next) {
   if (!oauthConfigured()) return res.status(503).json({ error: 'MCP OAuth não configurado' });
 
-  const metadataUrl = `${new URL(config.MCP_PUBLIC_URL).origin}/.well-known/oauth-protected-resource`;
-  const challenge = `Bearer resource_metadata="${metadataUrl}", scope="cotador:use"`;
+  const challenge = authorizationChallenge();
   const bearer = /^Bearer (\S+)$/i.exec(req.headers.authorization || '');
-  if (!bearer) {
-    res.set('WWW-Authenticate', challenge);
-    return res.status(401).json({ error: 'unauthorized' });
-  }
+  // Discovery must remain available before account linking. Individual tools
+  // return an MCP authentication challenge when invoked without credentials.
+  if (!bearer) return next();
 
   try {
     const { createRemoteJWKSet, jwtVerify } = await import('jose');
@@ -49,17 +82,35 @@ async function authenticateMcp(req, res, next) {
     const emailClaim = payload[`${namespace}/email`] ?? payload.email;
     const verifiedClaim = payload[`${namespace}/email_verified`] ?? payload.email_verified;
     const email = typeof emailClaim === 'string' ? emailClaim.toLowerCase() : '';
-    if (!scopes.includes('cotador:use') || verifiedClaim !== true ||
+    if (!scopes.includes(MCP_SCOPE) || verifiedClaim !== true ||
         !config.MCP_ALLOWED_EMAILS.includes(email)) {
-      res.set('WWW-Authenticate', `${challenge}, error="insufficient_scope"`);
+      res.set('WWW-Authenticate', authorizationChallenge(
+        'insufficient_scope',
+        'Token sem escopo ou usuário não autorizado.'
+      ));
       return res.status(403).json({ error: 'forbidden' });
     }
-    req.auth = { token: bearer[1], clientId: payload.client_id, scopes, extra: { email } };
+    req.auth = {
+      token: bearer[1],
+      clientId: payload.client_id || payload.azp || 'unknown',
+      scopes,
+      expiresAt: payload.exp,
+      resource: new URL(config.MCP_PUBLIC_URL),
+      extra: { email }
+    };
     next();
   } catch (err) {
-    res.set('WWW-Authenticate', `${challenge}, error="invalid_token"`);
+    res.set('WWW-Authenticate', authorizationChallenge(
+      'invalid_token',
+      'O token enviado não é válido.'
+    ));
     res.status(401).json({ error: 'invalid_token' });
   }
 }
 
-module.exports = { metadata, authenticateMcp };
+module.exports = {
+  metadata,
+  authenticateMcp,
+  oauthSecuritySchemes,
+  requireToolAuthentication
+};

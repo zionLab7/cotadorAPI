@@ -16,6 +16,7 @@ services:
       - PAINEL_USER=${PAINEL_USER:-jefferson@allcc.com.br}
       - PAINEL_PASSWORD=${PAINEL_PASSWORD}
       - PAINEL_URL=${PAINEL_URL:-https://beta.paineldocorretor.com.br}
+      - API_SECRET_TOKEN=${API_SECRET_TOKEN}
     volumes:
       # Persiste a sessão de login para não perder os cookies ao reiniciar o container
       - cotador_session:/app/session_data

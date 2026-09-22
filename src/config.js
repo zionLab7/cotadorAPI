@@ -11,5 +11,6 @@ module.exports = {
   STORAGE_STATE_PATH: process.env.STORAGE_STATE_PATH || path.join(__dirname, '..', 'storage_state.json'),
   CATALOGO_PATH: path.join(__dirname, '..', 'catalogo_planos_mapeados.json'),
   PDF_DIR: path.join(__dirname, '..', 'public', 'pdfs'),
-  CHROME_CHANNEL: process.env.CHROME_CHANNEL || (process.platform === 'darwin' ? 'chrome' : undefined)
+  CHROME_CHANNEL: process.env.CHROME_CHANNEL || (process.platform === 'darwin' ? 'chrome' : undefined),
+  API_SECRET_TOKEN: process.env.API_SECRET_TOKEN || ''
 };

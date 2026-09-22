@@ -12,13 +12,14 @@ const { executarCotacao } = require('./cotador');
 const { listarOperadoras, consultarPlanos, carregarCatalogo } = require('./catalogo');
 const { login, isSessionValid } = require('./auth');
 const { launchBrowser } = require('./browser');
+const { autenticarApiKey } = require('./middleware');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// Rota de Healthcheck e Status
+// Rota de Healthcheck e Status (pública)
 app.get('/api/status', async (req, res) => {
   const sessionExists = fs.existsSync(config.STORAGE_STATE_PATH);
   const catalogo = carregarCatalogo();
@@ -28,6 +29,7 @@ app.get('/api/status', async (req, res) => {
     status: 'online',
     servico: 'API Própria - Cotação de Planos de Saúde (Painel do Corretor)',
     versao: '1.0.0',
+    autenticacaoAtiva: Boolean(config.API_SECRET_TOKEN),
     sessaoAtiva: sessionExists,
     totalOperadorasCatalogo: Object.keys(catalogo).length,
     totalPlanosCatalogo: totalPlanosMapeados,
@@ -36,7 +38,7 @@ app.get('/api/status', async (req, res) => {
 });
 
 // Consulta de Operadoras disponíveis no catálogo
-app.get('/api/operadoras', (req, res) => {
+app.get('/api/operadoras', autenticarApiKey, (req, res) => {
   try {
     const operadoras = listarOperadoras();
     res.json({
@@ -50,7 +52,7 @@ app.get('/api/operadoras', (req, res) => {
 });
 
 // Consulta do Catálogo completo com filtros
-app.get('/api/catalogo', (req, res) => {
+app.get('/api/catalogo', autenticarApiKey, (req, res) => {
   try {
     const { operadora, acomodacao, coparticipacao, mei, busca } = req.query;
 
@@ -75,7 +77,7 @@ app.get('/api/catalogo', (req, res) => {
 });
 
 // Execução de Cotação Automatizada
-app.post('/api/cotacao', async (req, res) => {
+app.post('/api/cotacao', autenticarApiKey, async (req, res) => {
   try {
     const { titulo, cidade, modalidade, vidas, operadoras } = req.body;
 
@@ -107,7 +109,7 @@ app.post('/api/cotacao', async (req, res) => {
 });
 
 // Download do PDF gerado da cotação
-app.get('/api/cotacao/:id/pdf', (req, res) => {
+app.get('/api/cotacao/:id/pdf', autenticarApiKey, (req, res) => {
   const cotacaoId = req.params.id;
   const pdfPath = path.join(config.PDF_DIR, `cotacao-${cotacaoId}.pdf`);
 
@@ -124,7 +126,7 @@ app.get('/api/cotacao/:id/pdf', (req, res) => {
 });
 
 // Rota de Login / Autenticação manual ou renovação
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', autenticarApiKey, async (req, res) => {
   try {
     const { email, password } = req.body;
     const browser = await launchBrowser();

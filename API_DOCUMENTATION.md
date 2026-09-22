@@ -86,9 +86,46 @@ O cotador trabalha estritamente com as 10 faixas etárias padronizadas pela ANS:
 
 ---
 
-## 3. Autenticação e Gestão de Sessão
+## 3. Autenticação e Segurança
 
-A API gerencia a autenticação de forma **completamente transparente**:
+A API conta com duas camadas de autenticação: a **segurança de acesso aos endpoints da sua API** (para proteger seu servidor) e a **gestão de sessão com o Painel do Corretor** (feita automaticamente pelo robô).
+
+### 3.1 Token de Segurança da API (`API_SECRET_TOKEN`)
+
+Para proteger sua API contra acessos indevidos e garantir que somente seus chatbots (WhatsApp / Typebot), CRMs e serviços autorizados façam requisições, configure a variável de ambiente `API_SECRET_TOKEN` no `.env` ou no Portainer.
+
+Quando ativa, a API aceita a autenticação em **3 formatos flexíveis**:
+
+1. **Header Authorization Bearer (Recomendado para CRMs e Código)**:
+   ```http
+   Authorization: Bearer SEU_TOKEN_SECRETO
+   ```
+2. **Header Customizado `x-api-key` (Recomendado para Webhooks e Gateways)**:
+   ```http
+   x-api-key: SEU_TOKEN_SECRETO
+   ```
+3. **Query Parameter `?token=` na URL (Ideal para links de PDF no WhatsApp)**:
+   ```http
+   https://cotador.suacorretora.com.br/api/cotacao/01a0c871-5895-7e0d-9816-ec733d9acf7e/pdf?token=SEU_TOKEN_SECRETO
+   ```
+
+#### Resposta de Erro para Token Ausente ou Inválido (`401 Unauthorized`):
+```json
+{
+  "sucesso": false,
+  "erro": "Acesso não autorizado. Token de API ausente ou inválido.",
+  "ajuda": "Envie o cabeçalho \"Authorization: Bearer <SEU_TOKEN>\" ou \"x-api-key: <SEU_TOKEN>\" ou \"?token=<SEU_TOKEN>\""
+}
+```
+
+> [!NOTE]
+> O endpoint `GET /api/status` é **público**, permitindo que o Docker, Traefik, Portainer e serviços de monitoramento de uptime (como Uptime Kuma) validem a saúde da API sem necessidade de credenciais. Ele retorna o campo `"autenticacaoAtiva": true`.
+
+---
+
+### 3.2 Gestão de Sessão do Painel do Corretor
+
+O robô gerencia a sessão no Painel do Corretor de forma **100% autônoma e transparente**:
 1. **Sessão Persistente (`storage_state.json`)**:
    - Uma vez logado, todos os cookies e tokens do Painel do Corretor ficam salvos em disco.
    - Em cada nova cotação, o robô **não faz login do zero**: ele injeta os cookies salvos, acessa a cotação diretamente e conclui em segundos.
@@ -372,6 +409,7 @@ Força a execução do login com e-mail e senha e regenera o `storage_state.json
 ### Exemplo cURL
 ```bash
 curl -X POST http://localhost:3000/api/cotacao \
+  -H "Authorization: Bearer SEU_TOKEN_SECRETO" \
   -H "Content-Type: application/json" \
   -d '{
     "titulo": "Cotação Teste cURL",
@@ -388,6 +426,9 @@ curl -X POST http://localhost:3000/api/cotacao \
 ```javascript
 const axios = require('axios');
 
+const API_URL = 'http://localhost:3000';
+const API_TOKEN = 'SEU_TOKEN_SECRETO';
+
 async function solicitarCotacao() {
   const payload = {
     titulo: 'Cotação WhatsApp PME',
@@ -399,12 +440,17 @@ async function solicitarCotacao() {
     ]
   };
 
-  const response = await axios.post('http://localhost:3000/api/cotacao', payload);
+  const response = await axios.post(`${API_URL}/api/cotacao`, payload, {
+    headers: {
+      Authorization: `Bearer ${API_TOKEN}`
+    }
+  });
+
   console.log('Cotação ID:', response.data.cotacaoId);
   console.log('Total Planos:', response.data.totalPlanos);
   
-  // Link para o PDF
-  const pdfDownloadUrl = `http://localhost:3000${response.data.pdf.urlDownload}`;
+  // Link direto para download do PDF com o token anexado (para envio no WhatsApp)
+  const pdfDownloadUrl = `${API_URL}${response.data.pdf.urlDownload}?token=${API_TOKEN}`;
   console.log('Baixar PDF em:', pdfDownloadUrl);
 }
 
@@ -416,6 +462,13 @@ solicitarCotacao();
 import requests
 
 url = "http://localhost:3000/api/cotacao"
+token = "SEU_TOKEN_SECRETO"
+
+headers = {
+    "Authorization": f"Bearer {token}",
+    "Content-Type": "application/json"
+}
+
 payload = {
     "titulo": "Cotação Python API",
     "cidade": "Guarulhos - SP",
@@ -426,17 +479,23 @@ payload = {
     ]
 }
 
-res = requests.post(url, json=payload)
+res = requests.post(url, json=payload, headers=headers)
 data = res.json()
 
 for plano in data.get("planos", []):
     print(f"{plano['operadora']} - {plano['plano']}: R$ {plano['valorTotal']:.2f}")
+
+pdf_url = f"http://localhost:3000{data['pdf']['urlDownload']}?token={token}"
+print("PDF pronto:", pdf_url)
 ```
 
 ### Exemplo Typebot / N8N
 1. No Typebot / N8N, crie um nó do tipo **Webhook / HTTP Request**:
    - **Method**: `POST`
    - **URL**: `https://cotador.seudominio.com.br/api/cotacao`
+   - **Headers**:
+     - `Authorization`: `Bearer SEU_TOKEN_SECRETO`
+     - `Content-Type`: `application/json`
    - **Body**:
      ```json
      {
@@ -450,5 +509,6 @@ for plano in data.get("planos", []):
      ```
 2. Salve a resposta nas variáveis do Typebot:
    - `resultado = response.planos`
-   - `pdf_url = "https://cotador.seudominio.com.br" + response.pdf.urlDownload`
-3. Envie a mensagem de texto com os valores e, em seguida, anexe o PDF no bloco de arquivo!
+   - `pdf_url = "https://cotador.seudominio.com.br" + response.pdf.urlDownload + "?token=SEU_TOKEN_SECRETO"`
+3. Envie a mensagem de texto com os valores e, em seguida, anexe o link ou o arquivo PDF direto para o lead no WhatsApp!
+

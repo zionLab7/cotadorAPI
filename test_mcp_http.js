@@ -40,9 +40,52 @@ async function main() {
     assert.equal(meta.status, 200);
     assert.equal((await meta.json()).resource, `${base}/mcp`);
 
-    const noAuth = await fetch(`${base}/mcp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    assert.equal(noAuth.status, 401);
-    assert.match(noAuth.headers.get('www-authenticate'), /oauth-protected-resource/);
+    async function rawMcp(method, params = {}, token) {
+      const response = await fetch(`${base}/mcp`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream'
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+      });
+      const text = await response.text();
+      const dataLine = text.split(/\r?\n/).find(line => line.startsWith('data:'));
+      return {
+        response,
+        body: JSON.parse(dataLine ? dataLine.slice(5).trim() : text)
+      };
+    }
+
+    const initialize = await rawMcp('initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'discovery-test', version: '1' }
+    });
+    assert.equal(initialize.response.status, 200);
+
+    const anonymousTools = await rawMcp('tools/list');
+    assert.equal(anonymousTools.response.status, 200);
+    assert.equal(anonymousTools.body.result.tools.length, 4);
+    for (const tool of anonymousTools.body.result.tools) {
+      assert.deepEqual(tool.securitySchemes, [{ type: 'oauth2', scopes: ['cotador:use'] }]);
+    }
+
+    const anonymousResources = await rawMcp('resources/list');
+    assert.equal(anonymousResources.response.status, 200);
+    assert.equal(anonymousResources.body.error.code, -32601);
+
+    const anonymousCall = await rawMcp('tools/call', {
+      name: 'listar_operadoras',
+      arguments: {}
+    });
+    assert.equal(anonymousCall.response.status, 200);
+    assert.equal(anonymousCall.body.result.isError, true);
+    assert.match(
+      anonymousCall.body.result._meta['mcp/www_authenticate'][0],
+      /oauth-protected-resource.*insufficient_scope/
+    );
 
     async function sign(overrides = {}) {
       return new SignJWT({ email: 'tester@example.test', email_verified: true, scope: 'cotador:use', ...overrides })
@@ -72,6 +115,13 @@ async function main() {
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } } })
     });
     assert.equal(namespacedResponse.status, 200);
+
+    const invalidToken = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer not-a-jwt' }
+    });
+    assert.equal(invalidToken.status, 401);
+    assert.match(invalidToken.headers.get('www-authenticate'), /invalid_token/);
 
     const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
       requestInit: { headers: { Authorization: `Bearer ${await sign()}` } }

@@ -11,6 +11,7 @@ RUN npx playwright install chromium
 # Copia código fonte e catálogo de planos mapeados
 COPY src ./src
 COPY catalogo_planos_mapeados.json ./
+COPY catalogo_completo_raw.json ./
 COPY README.md ./
 
 # Cria pasta de PDFs com permissões adequadas

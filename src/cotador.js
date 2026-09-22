@@ -28,14 +28,142 @@ if (!fs.existsSync(config.PDF_DIR)) {
   fs.mkdirSync(config.PDF_DIR, { recursive: true });
 }
 
+// Carrega catálogo de planos brutos se existir
+let rawCatalog = null;
+const rawCatalogPath = path.join(__dirname, '..', 'catalogo_completo_raw.json');
+if (fs.existsSync(rawCatalogPath)) {
+  try {
+    rawCatalog = JSON.parse(fs.readFileSync(rawCatalogPath, 'utf-8'));
+  } catch (e) {}
+}
+
+/**
+ * Seleciona planos na cotação ativa
+ */
+async function selecionarPlanos(page, cotacaoId, params = {}) {
+  const cidade = params.cidade || 'Guarulhos - SP';
+  const modalidade = params.modalidade || 2;
+  const operadorasDesejadas = params.operadoras && params.operadoras.length > 0
+    ? params.operadoras
+    : ['Porto Seguro', 'Amil', 'Bradesco Seguros', 'Sulamérica', 'Alice', 'Omint'];
+
+  console.log(`[COTADOR] Selecionando planos para operadoras: ${operadorasDesejadas.join(', ')}...`);
+
+  let totalSelecionados = 0;
+
+  // Método 1: Injeção direta via Server Action (ultra-rápido e confiável)
+  if (rawCatalog) {
+    const plansToAdd = [];
+    for (const opName of operadorasDesejadas) {
+      // Encontra a chave da operadora no catálogo (case-insensitive)
+      const matchingKey = Object.keys(rawCatalog).find(k => k.toLowerCase().includes(opName.toLowerCase()));
+      if (matchingKey && rawCatalog[matchingKey]) {
+        // Pega os 2 primeiros planos da operadora (Apartamento ou Enfermaria)
+        const opPlans = rawCatalog[matchingKey];
+        const apto = opPlans.find(p => p.plano?.acomodacao === 1);
+        const enf = opPlans.find(p => p.plano?.acomodacao === 0);
+        if (apto) plansToAdd.push(apto);
+        if (enf) plansToAdd.push(enf);
+        if (!apto && !enf && opPlans.length > 0) plansToAdd.push(opPlans[0]);
+      }
+    }
+
+    if (plansToAdd.length > 0) {
+      console.log(`[COTADOR] Tentando adicionar ${plansToAdd.length} planos via Server Action...`);
+      try {
+        const added = await page.evaluate(async ({ cotacaoId, cidade, modalidade, plans }) => {
+          let count = 0;
+          for (const p of plans) {
+            try {
+              const body = [
+                cotacaoId,
+                {
+                  cidade: cidade,
+                  modalidade: modalidade,
+                  credenciados: [],
+                  key: p.key,
+                  administradora: p.administradora,
+                  operadora: p.operadora,
+                  produto: p.produto,
+                  plano: p.plano,
+                  tabela: p.tabela
+                }
+              ];
+
+              const res = await fetch(`/cotacoes/${cotacaoId}/edit?d=cenarios`, {
+                method: 'POST',
+                headers: {
+                  'next-action': '60eb515926e2e36991adb35bba32bddb7d8a571240',
+                  'content-type': 'text/plain;charset=UTF-8'
+                },
+                body: JSON.stringify(body)
+              });
+
+              if (res.ok) count++;
+            } catch (err) {}
+          }
+          return count;
+        }, { cotacaoId, cidade, modalidade, plans: plansToAdd });
+
+        totalSelecionados = added;
+        console.log(`[COTADOR] ${added} planos selecionados com sucesso via Server Action!`);
+      } catch (e) {
+        console.log(`[COTADOR] Nota na injeção via Server Action: ${e.message}`);
+      }
+    }
+  }
+
+  // Método 2: Fallback via cliques na interface gráfica do navegador
+  if (totalSelecionados === 0) {
+    console.log('[COTADOR] Executando seleção via interface gráfica...');
+    try {
+      // Abre a tela de cenários
+      await page.goto(`${config.PAINEL_URL}/cotacoes/${cotacaoId}/edit?d=cenarios`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 20000
+      });
+      await page.waitForTimeout(2000);
+
+      // Procura botões com logotipo de operadoras
+      const opButtons = page.locator('button:has(img), div:has(> button > div > img)');
+      const countOps = await opButtons.count();
+      console.log(`[COTADOR] ${countOps} operadoras encontradas na tela.`);
+
+      for (let i = 0; i < Math.min(countOps, 4); i++) {
+        try {
+          const btn = opButtons.nth(i);
+          if (await btn.isVisible()) {
+            await btn.click({ timeout: 3000 }).catch(() => {});
+            await page.waitForTimeout(1000);
+
+            // Clica nas opções/checkboxes que abriram no popover
+            const planOptions = page.locator('[role="option"], div[class*="group gap-2 p-3"], [role="checkbox"]');
+            const optCount = await planOptions.count();
+            if (optCount > 0) {
+              await planOptions.first().click({ timeout: 2000 }).catch(() => {});
+              totalSelecionados++;
+              await page.waitForTimeout(500);
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Clica no botão Continuar se existir
+      const continuarBtn = page.locator('button:has-text("Continuar"), button:has-text("Confirmar")').first();
+      if (await continuarBtn.isVisible().catch(() => false)) {
+        await continuarBtn.click().catch(() => {});
+        await page.waitForTimeout(1000);
+      }
+    } catch (err) {
+      console.log(`[COTADOR] Nota na seleção visual: ${err.message}`);
+    }
+  }
+
+  return totalSelecionados;
+}
+
 /**
  * Executa uma cotação completa
- * @param {Object} params
- * @param {string} params.titulo Título da cotação
- * @param {string} params.cidade Cidade (ex: "Guarulhos - SP", "São Paulo - SP")
- * @param {number} params.modalidade 2 = PME, etc.
- * @param {Array<{faixa: string, quantidade: number}>} params.vidas Distribuição de vidas por idade
- * @param {Array<string>} params.operadoras Lista de operadoras desejadas (opcional)
  */
 async function executarCotacao(params = {}) {
   const titulo = params.titulo || `Cotação ${new Date().toLocaleDateString('pt-BR')}`;
@@ -94,37 +222,24 @@ async function executarCotacao(params = {}) {
       await confirmBtn.click();
     }
 
-    // 5. Navega para a seleção de cenários
-    await page.waitForTimeout(1500);
-    const cenariosUrl = `${config.PAINEL_URL}/cotacoes/${cotacaoId}/edit?d=cenarios`;
-    console.log('[COTADOR] Abrindo seleção de cenários de planos...');
-    await page.goto(cenariosUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
     await page.waitForTimeout(2000);
 
-    // Seleciona planos disponíveis na tela
-    // Clica nos planos visíveis para compor a cotação
-    console.log('[COTADOR] Selecionando planos disponíveis para comparação...');
-    const planCards = page.locator('[role="button"], div[class*="cursor-pointer"], p[class*="font-semibold"]');
-    const count = await planCards.count();
-    let selected = 0;
-    for (let i = 0; i < Math.min(count, 12); i++) {
-      try {
-        const card = planCards.nth(i);
-        const text = await card.innerText();
-        if (text && !text.includes('Confirmar') && !text.includes('Cancelar')) {
-          await card.click().catch(() => {});
-          selected++;
-          await page.waitForTimeout(300);
-        }
-      } catch (e) {}
-    }
-    console.log(`[COTADOR] ${selected} seleções realizadas nos cenários.`);
+    // 5. Seleciona os planos da cotação
+    const totalSelecionados = await selecionarPlanos(page, cotacaoId, params);
+    console.log(`[COTADOR] Total de planos confirmados na cotação: ${totalSelecionados}`);
 
     // 6. Acessa a tela oficial de Impressão e Comparativo
     const printUrl = `${config.PAINEL_URL}/cotacoes/${cotacaoId}/print`;
     console.log(`[COTADOR] Carregando relatório comparativo em: ${printUrl}`);
-    await page.goto(printUrl, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('table', { timeout: 15000 });
+    await page.goto(printUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // Aguarda tabela ou conteúdo comparativo carregar
+    try {
+      await page.waitForSelector('table', { timeout: 25000 });
+    } catch (e) {
+      console.warn('[COTADOR] Aviso: Tabela principal demorou a responder, tentando ler conteúdo da página...');
+      await page.waitForTimeout(3000);
+    }
 
     // 7. Extrai o HTML completo e faz o parse estruturado
     const htmlContent = await page.content();
@@ -146,6 +261,8 @@ async function executarCotacao(params = {}) {
         left: '10mm',
         right: '10mm'
       }
+    }).catch(err => {
+      console.warn(`[COTADOR] Nota na geração do PDF: ${err.message}`);
     });
 
     // 9. Formata o objeto de retorno
@@ -154,9 +271,9 @@ async function executarCotacao(params = {}) {
       cotacaoId: cotacaoId,
       titulo: cotacaoParsed ? cotacaoParsed.titulo : titulo,
       corretor: cotacaoParsed ? cotacaoParsed.corretor : {},
-      totalPlanos: cotacaoParsed ? cotacaoParsed.totalPlanos : 0,
+      totalPlanos: cotacaoParsed ? cotacaoParsed.totalPlanos : totalSelecionados,
       planos: cotacaoParsed ? cotacaoParsed.planos : [],
-      resumoHospitais: cotacaoParsed ? cotacaoParsed.hospitais.slice(0, 20) : [],
+      resumoHospitais: cotacaoParsed && cotacaoParsed.hospitais ? cotacaoParsed.hospitais.slice(0, 20) : [],
       totalHospitaisMapeados: cotacaoParsed ? cotacaoParsed.totalHospitaisMapeados : 0,
       pdf: {
         nomeArquivo: pdfFilename,

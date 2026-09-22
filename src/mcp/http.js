@@ -6,7 +6,7 @@ const { createMcpServer } = require('./server');
 function createHttpMcpRouter(authenticateMcp) {
   const router = express.Router();
   router.all('/', authenticateMcp, async (req, res) => {
-    const server = createMcpServer();
+    const server = createMcpServer({ requireOAuth: true });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     try {
       await server.connect(transport);

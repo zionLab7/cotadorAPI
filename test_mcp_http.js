@@ -72,6 +72,12 @@ async function main() {
       assert.deepEqual(tool.securitySchemes, [{ type: 'oauth2', scopes: ['cotador:use'] }]);
     }
 
+    // ChatGPT refreshes descriptors with any stored OAuth token. Discovery
+    // must not disappear when that token is stale or lacks application claims.
+    const staleTokenTools = await rawMcp('tools/list', {}, 'not-a-jwt');
+    assert.equal(staleTokenTools.response.status, 200);
+    assert.equal(staleTokenTools.body.result.tools.length, 4);
+
     const anonymousResources = await rawMcp('resources/list');
     assert.equal(anonymousResources.response.status, 200);
     assert.equal(anonymousResources.body.error.code, -32601);
@@ -94,6 +100,14 @@ async function main() {
         .setAudience(config.MCP_PUBLIC_URL)
         .setIssuedAt().setExpirationTime('5m').sign(privateKey);
     }
+    const unauthorizedDiscovery = await rawMcp(
+      'tools/list',
+      {},
+      await sign({ email: 'outsider@example.test', scope: 'other' })
+    );
+    assert.equal(unauthorizedDiscovery.response.status, 200);
+    assert.equal(unauthorizedDiscovery.body.result.tools.length, 4);
+
     const otherUser = await fetch(`${base}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${await sign({ email: 'outsider@example.test' })}` } });
     assert.equal(otherUser.status, 403);
     const invalidScope = await fetch(`${base}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${await sign({ scope: 'other' })}` } });

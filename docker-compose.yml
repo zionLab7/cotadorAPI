@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  cotador-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cotador-api
+    restart: unless-stopped
+    shm_size: '2gb' # Garante memória compartilhada suficiente para o Chromium headless
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - HEADLESS=true
+      - STORAGE_STATE_PATH=/app/session_data/storage_state.json
+      - PAINEL_USER=${PAINEL_USER:-jefferson@allcc.com.br}
+      - PAINEL_PASSWORD=${PAINEL_PASSWORD}
+      - PAINEL_URL=${PAINEL_URL:-https://beta.paineldocorretor.com.br}
+    volumes:
+      # Persiste a sessão de login para não perder os cookies ao reiniciar o container
+      - cotador_session:/app/session_data
+      # Persiste os PDFs gerados
+      - cotador_pdfs:/app/public/pdfs
+    networks:
+      - traefik_public
+    labels:
+      - "traefik.enable=true"
+      # Altere para o seu subdomínio configurado no DNS / Cloudflare
+      - "traefik.http.routers.cotador.rule=Host(`${COTADOR_DOMAIN:-cotador.seudominio.com.br}`)"
+      - "traefik.http.routers.cotador.entrypoints=websecure"
+      - "traefik.http.routers.cotador.tls=true"
+      - "traefik.http.routers.cotador.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.cotador.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik_public"
+
+volumes:
+  cotador_session:
+    name: cotador_session_data
+  cotador_pdfs:
+    name: cotador_generated_pdfs
+
+networks:
+  # Rede externa do seu Traefik (ajuste para o nome da sua rede existente, ex: traefik_public, proxy, web)
+  traefik_public:
+    external: true

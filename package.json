@@ -1,0 +1,21 @@
+{
+  "name": "puppetscotador",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node test_parser.js && node test_api.js",
+    "record": "node recorder.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.2",
+    "express": "^5.2.1",
+    "playwright-core": "^1.63.0"
+  }
+}

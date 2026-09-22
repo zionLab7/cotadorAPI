@@ -1,0 +1,11 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+raw_capture
+*.har
+*.log
+test_*.js
+recorder.js
+public/pdfs/*.pdf

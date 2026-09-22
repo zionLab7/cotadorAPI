@@ -69,6 +69,11 @@ async function main() {
     assert.equal(anonymousTools.response.status, 200);
     assert.equal(anonymousTools.body.result.tools.length, 4);
     for (const tool of anonymousTools.body.result.tools) {
+      assert.equal(typeof tool.title, 'string');
+      assert.ok(tool.title.length > 0);
+      assert.equal(typeof tool.annotations?.readOnlyHint, 'boolean');
+      assert.equal(typeof tool.annotations?.openWorldHint, 'boolean');
+      assert.equal(typeof tool.annotations?.destructiveHint, 'boolean');
       assert.deepEqual(tool.securitySchemes, [{ type: 'oauth2', scopes: ['cotador:use'] }]);
     }
 

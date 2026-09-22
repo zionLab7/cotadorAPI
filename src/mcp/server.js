@@ -17,11 +17,19 @@ function createMcpServer() {
     description: 'Servidor MCP para automação e cotação de planos de saúde no Painel do Corretor (Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint)'
   });
 
+  // ChatGPT reads the OAuth policy from each tool descriptor when discovering
+  // the MCP server. Keep the declaration per tool, as required by the plugin
+  // contract, so the tools remain visible after an OAuth connection.
+  const oauthSecuritySchemes = [{ type: 'oauth2', scopes: ['cotador:use'] }];
+
   // 1. Tool: listar_operadoras
-  server.tool(
+  server.registerTool(
     'listar_operadoras',
-    'Lista todas as 6 operadoras homologadas com quantidade de planos mapeados e linhas disponíveis.',
-    {},
+    {
+      description: 'Lista todas as 6 operadoras homologadas com quantidade de planos mapeados e linhas disponíveis.',
+      inputSchema: {},
+      securitySchemes: oauthSecuritySchemes
+    },
     async () => {
       try {
         const operadoras = listarOperadoras();
@@ -43,15 +51,18 @@ function createMcpServer() {
   );
 
   // 2. Tool: consultar_catalogo
-  server.tool(
+  server.registerTool(
     'consultar_catalogo',
-    'Consulta e filtra o catálogo de 718 planos de saúde homologados (Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint).',
     {
+      description: 'Consulta e filtra o catálogo de 718 planos de saúde homologados (Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint).',
+      securitySchemes: oauthSecuritySchemes,
+      inputSchema: {
       operadora: z.string().optional().describe('Nome da operadora (ex: Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint)'),
       acomodacao: z.enum(['apartamento', 'enfermaria']).optional().describe('Tipo de acomodação desejada'),
       coparticipacao: z.boolean().optional().describe('true para planos com coparticipação, false para sem coparticipação'),
       mei: z.boolean().optional().describe('true para filtrar planos compatíveis com MEI'),
       busca: z.string().optional().describe('Termo de busca para pesquisar no nome do plano ou produto')
+      }
     },
     async (args) => {
       try {
@@ -80,10 +91,12 @@ function createMcpServer() {
   );
 
   // 3. Tool: cotar_planos
-  server.tool(
+  server.registerTool(
     'cotar_planos',
-    'Executa a cotação automatizada no Painel do Corretor e retorna valores por faixa, total por plano, acomodação e coparticipação. Retorna o ID do PDF, sem link público.',
     {
+      description: 'Executa a cotação automatizada no Painel do Corretor e retorna valores por faixa, total por plano, acomodação e coparticipação. Retorna o ID do PDF, sem link público.',
+      securitySchemes: oauthSecuritySchemes,
+      inputSchema: {
       titulo: z.string().optional().describe('Nome identificador da cotação (ex: "Cotação PME - Família Silva")'),
       cidade: z.string().optional().describe('Cidade e UF da cotação (ex: "Guarulhos - SP", "São Paulo - SP")'),
       modalidade: z.number().int().optional().describe('Modalidade: 2 para Saúde PME (padrão), 1 para Individual/Familiar, 3 para Coletivo Adesão'),
@@ -94,6 +107,7 @@ function createMcpServer() {
         })
       ).min(1).describe('Lista de pessoas agrupadas por faixa etária'),
       operadoras: z.array(z.string()).optional().describe('Lista opcional de operadoras para cotar (ex: ["Amil", "Bradesco Seguros"]). Se omitido, cota todas as disponíveis.')
+      }
     },
     async (args) => {
       try {
@@ -134,10 +148,13 @@ function createMcpServer() {
   );
 
   // 4. Tool: verificar_status_cotador
-  server.tool(
+  server.registerTool(
     'verificar_status_cotador',
-    'Verifica a saúde da API do cotador, integridade da sessão no Painel do Corretor e total de planos cadastrados.',
-    {},
+    {
+      description: 'Verifica a saúde da API do cotador, integridade da sessão no Painel do Corretor e total de planos cadastrados.',
+      inputSchema: {},
+      securitySchemes: oauthSecuritySchemes
+    },
     async () => {
       try {
         const sessionExists = fs.existsSync(config.STORAGE_STATE_PATH);

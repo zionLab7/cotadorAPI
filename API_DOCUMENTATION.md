@@ -21,6 +21,7 @@ Esta API permite que sistemas externos (**Chatbots**, **WhatsApp / Evolution API
    - [Node.js / Axios](#exemplo-nodejs--axios)
    - [Python / Requests](#exemplo-python)
    - [Typebot / Webhook](#exemplo-typebot--n8n)
+7. [Servidor MCP para Agentes de IA (Claude, Cursor, N8N)](#7-servidor-mcp-para-agentes-de-ia)
 
 ---
 
@@ -511,4 +512,23 @@ print("PDF pronto:", pdf_url)
    - `resultado = response.planos`
    - `pdf_url = "https://cotador.seudominio.com.br" + response.pdf.urlDownload + "?token=SEU_TOKEN_SECRETO"`
 3. Envie a mensagem de texto com os valores e, em seguida, anexe o link ou o arquivo PDF direto para o lead no WhatsApp!
+
+---
+
+## 7. Servidor MCP para Agentes de IA
+
+Além da API REST, a stack conta com um **Servidor MCP (Model Context Protocol)** nativo para conectar diretamente agentes como **Claude Desktop**, **Cursor IDE**, **N8N AI Agent**, **LangChain**, etc.
+
+### Endpoints MCP (Transporte SSE)
+- **Conexão SSE**: `GET /mcp/sse` (com `Authorization: Bearer <TOKEN>` ou `?token=<TOKEN>`)
+- **Mensagens JSON-RPC**: `POST /mcp/messages?sessionId=<ID>`
+
+### Ferramentas Expostas para o Agente:
+1. `cotar_planos`: Realiza a cotação completa e retorna valores e PDF.
+2. `consultar_catalogo`: Busca e filtra os 718 planos de saúde.
+3. `listar_operadoras`: Lista as 6 operadoras e contagem de planos.
+4. `verificar_status_cotador`: Verifica integridade e status de sessão.
+
+Consulte o arquivo [`MCP_DOCUMENTATION.md`](file:///Users/zionmac/Desktop/PuppetsCotador/MCP_DOCUMENTATION.md) para o passo a passo de configuração no Claude Desktop, Cursor e N8N.
+
 

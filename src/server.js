@@ -13,11 +13,15 @@ const { listarOperadoras, consultarPlanos, carregarCatalogo } = require('./catal
 const { login, isSessionValid } = require('./auth');
 const { launchBrowser } = require('./browser');
 const { autenticarApiKey } = require('./middleware');
+const { createMcpRouter } = require('./mcp/sse');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Servidor MCP (Model Context Protocol) via SSE para Agentes de IA
+app.use('/mcp', createMcpRouter(autenticarApiKey));
 
 // Rota de Healthcheck e Status (pública)
 app.get('/api/status', async (req, res) => {
@@ -30,6 +34,7 @@ app.get('/api/status', async (req, res) => {
     servico: 'API Própria - Cotação de Planos de Saúde (Painel do Corretor)',
     versao: '1.0.0',
     autenticacaoAtiva: Boolean(config.API_SECRET_TOKEN),
+    servidorMcpAtivo: true,
     sessaoAtiva: sessionExists,
     totalOperadorasCatalogo: Object.keys(catalogo).length,
     totalPlanosCatalogo: totalPlanosMapeados,
@@ -155,6 +160,7 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`- Catálogo:   GET  http://localhost:${PORT}/api/catalogo`);
     console.log(`- Cotar:      POST http://localhost:${PORT}/api/cotacao`);
     console.log(`- Baixar PDF: GET  http://localhost:${PORT}/api/cotacao/:id/pdf`);
+    console.log(`- MCP SSE:    GET  http://localhost:${PORT}/mcp/sse`);
     console.log('=====================================================\n');
   });
 }

@@ -11,6 +11,8 @@ API REST desenvolvida com **Node.js, Express e Playwright** para automação com
 - **Geração de PDF Oficial**: Faz o download e disponibiliza o PDF original consolidado da cotação para envio direto como anexo no WhatsApp.
 - **Mapeamento de Catálogo**: Acesso a **718 variações de planos mapeados** (Amil, Bradesco, Porto Seguro, SulAmérica, Alice, Omint) com busca e filtros.
 - **Rede Credenciada**: Extrai hospitais e laboratórios credenciados por plano com filtros regionais.
+- **Servidor MCP Oficial (Model Context Protocol)**: Conecta nativamente Agentes de IA (**Claude Desktop**, **Cursor IDE**, **N8N AI Agent**, **LangChain**) via ferramentas (*Tools*) de cotação e catálogo.
+- **Camada de Autenticação Segura**: Suporte a Bearer Token, header `x-api-key` e query param `?token=` (`API_SECRET_TOKEN`).
 - **Sessão Persistente (`storage_state.json`)**: Reutiliza a sessão autenticada para respostas ultra-rápidas sem necessidade de login a cada requisição.
 
 ---

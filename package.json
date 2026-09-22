@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node test_parser.js && node test_api.js",
+    "test": "node test_parser.js && node test_api.js && node test_mcp.js",
+    "mcp": "node src/mcp/stdio.js",
     "record": "node recorder.js"
   },
   "keywords": [],
@@ -13,10 +14,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.2",
     "express": "^5.2.1",
     "playwright": "^1.63.0",
-    "playwright-core": "^1.63.0"
+    "playwright-core": "^1.63.0",
+    "zod": "^4.6.5"
   }
 }

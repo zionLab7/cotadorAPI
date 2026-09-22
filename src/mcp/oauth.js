@@ -44,8 +44,12 @@ async function authenticateMcp(req, res, next) {
       algorithms: ['RS256', 'ES256']
     });
     const scopes = typeof payload.scope === 'string' ? payload.scope.split(/\s+/) : [];
-    const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
-    if (!scopes.includes('cotador:use') || payload.email_verified !== true ||
+    // Auth0 Post-Login Actions use public namespaced claims in access tokens.
+    const namespace = `${config.MCP_PUBLIC_URL}/claims`;
+    const emailClaim = payload[`${namespace}/email`] ?? payload.email;
+    const verifiedClaim = payload[`${namespace}/email_verified`] ?? payload.email_verified;
+    const email = typeof emailClaim === 'string' ? emailClaim.toLowerCase() : '';
+    if (!scopes.includes('cotador:use') || verifiedClaim !== true ||
         !config.MCP_ALLOWED_EMAILS.includes(email)) {
       res.set('WWW-Authenticate', `${challenge}, error="insufficient_scope"`);
       return res.status(403).json({ error: 'forbidden' });

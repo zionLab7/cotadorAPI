@@ -4,11 +4,21 @@ Este repositório contém o servidor MCP e um pacote portátil em `plugin/`. O e
 
 ## Antes de instalar
 
-1. Escolha e configure um provedor OAuth 2.1/OIDC que ofereça authorization code + PKCE S256, metadados de descoberta e JWKS. Permita o cliente/redirect URI indicado pelo ChatGPT durante a criação da conexão. O token de **acesso** deve ser um JWT RS256 ou ES256 com `iss` igual ao provedor, `aud` igual à URL completa do MCP, `scope` contendo `cotador:use`, e `email` + `email_verified: true`. Configure no provedor somente os funcionários autorizados.
-2. Defina no deploy `MCP_PUBLIC_URL=https://DOMINIO-REAL/mcp`, `MCP_OAUTH_ISSUER`, `MCP_OAUTH_JWKS_URI` e `MCP_ALLOWED_EMAILS` com os e-mails autorizados separados por vírgulas. Mantenha `API_SECRET_TOKEN` reservado à API REST/integrações legadas; ele não autentica o endpoint `/mcp` novo.
-3. Faça o deploy com HTTPS e verifique `GET https://DOMINIO-REAL/.well-known/oauth-protected-resource`, `POST https://DOMINIO-REAL/mcp` sem token (deve retornar 401 com `WWW-Authenticate`) e uma conexão autenticada pelo MCP Inspector. Confira que as quatro ferramentas aparecem e faça uma cotação controlada.
-4. Substitua a URL de exemplo em `plugin/mcp.json` pelo mesmo endpoint HTTPS real; publique uma versão revisada do pacote. Enquanto o placeholder estiver presente, **não instale o pacote**. O repositório não contém o endereço real confirmado da implantação.
-5. No ChatGPT, ative o modo de desenvolvedor em Configurações > Segurança e login, abra Plug-ins > `+` e adicione a URL do MCP. Conclua o login OAuth e confirme a lista de ferramentas. Para disponibilizar à equipe, publique o plugin ou conexão no workspace conforme as permissões de administrador; cada pessoa deve entrar com sua própria conta do provedor. A publicação no workspace depende do plano e das políticas do workspace. O pacote em `plugin/` pode ser usado no fluxo de distribuição do workspace.
+1. Configure um provedor OAuth 2.1/OIDC com authorization code + PKCE S256, metadados de descoberta e JWKS. O Auth0 é uma opção no plano gratuito. Registre uma API com identificador exatamente `https://cotador.camaleao.cloud/mcp`, crie a permissão `cotador:use`, habilite o Resource Parameter Compatibility Profile e CIMD (ou DCR com políticas de registro restritas). Permita o cliente e o redirect URI indicados pelo ChatGPT ao criar a conexão. O token de **acesso** deve ser um JWT RS256 ou ES256 com `iss` igual ao provedor, `aud` incluindo a URL do MCP e `scope` contendo `cotador:use`.
+2. No Auth0, crie e implante uma Action de Post Login que inclua e-mail e verificação nos claims do token de acesso. Substitua o endereço se o domínio do MCP mudar:
+
+   ```js
+   exports.onExecutePostLogin = async (event, api) => {
+     const audience = 'https://cotador.camaleao.cloud/mcp';
+     if (event.resource_server?.identifier !== audience) return;
+     api.accessToken.setCustomClaim(`${audience}/claims/email`, event.user.email);
+     api.accessToken.setCustomClaim(`${audience}/claims/email_verified`, event.user.email_verified === true);
+   };
+   ```
+
+3. Nas variáveis da Stack no Portainer, defina `MCP_PUBLIC_URL=https://cotador.camaleao.cloud/mcp`, `MCP_OAUTH_ISSUER` (exatamente o valor `issuer` publicado pelo Auth0, incluindo a barra final se houver), `MCP_OAUTH_JWKS_URI` (URL `jwks_uri` da descoberta do provedor) e `MCP_ALLOWED_EMAILS` (e-mails autorizados separados por vírgulas). Confirme que `COTADOR_DOMAIN=cotador.camaleao.cloud` e `PAINEL_USER`, `PAINEL_PASSWORD` e `API_SECRET_TOKEN` continuam preenchidos. O `API_SECRET_TOKEN` não autentica o endpoint MCP novo.
+4. Faça o deploy com HTTPS e verifique `GET https://cotador.camaleao.cloud/.well-known/oauth-protected-resource`, `POST https://cotador.camaleao.cloud/mcp` sem token (deve retornar 401 com `WWW-Authenticate`) e uma conexão autenticada pelo MCP Inspector. Confira as quatro ferramentas e faça uma cotação controlada. O endereço já está em `plugin/mcp.json`, mas a instalação só funcionará depois de ativar OAuth no Auth0.
+5. No ChatGPT, ative o modo de desenvolvedor em Configurações > Segurança e login, abra Plug-ins > `+` e adicione `https://cotador.camaleao.cloud/mcp`. Conclua o login OAuth e confirme as ferramentas. Para a equipe, publique o plugin ou conexão no workspace conforme as permissões de administrador; cada pessoa deve entrar com sua própria conta do provedor. O e-mail do provedor pode ser diferente do e-mail da conta ChatGPT, salvo restrições de identidade do workspace.
 
 O PDF da cotação continua salvo no servidor. O resultado MCP fornece apenas `cotacaoId`, nome do arquivo e indicador de disponibilidade. Para entregar o PDF no ChatGPT, implemente um download com autorização por usuário ou link temporário assinado; não anexe `API_SECRET_TOKEN` à URL. A rota REST de PDF existente continua com o contrato anterior para clientes já integrados.
 

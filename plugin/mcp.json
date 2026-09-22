@@ -3,7 +3,7 @@
   "mcpServers": {
     "all-cubo-cotador": {
       "type": "streamable-http",
-      "url": "https://SUBSTITUIR-PELO-DOMINIO-REAL/mcp"
+      "url": "https://cotador.camaleao.cloud/mcp"
     }
   }
 }

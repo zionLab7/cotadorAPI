@@ -61,6 +61,18 @@ async function main() {
     const rejectedAudience = await fetch(`${base}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${wrongAudience}` } });
     assert.equal(rejectedAudience.status, 401);
 
+    const namespaced = await sign({
+      email: undefined, email_verified: undefined,
+      [`${config.MCP_PUBLIC_URL}/claims/email`]: 'tester@example.test',
+      [`${config.MCP_PUBLIC_URL}/claims/email_verified`]: true
+    });
+    const namespacedResponse = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${namespaced}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } } })
+    });
+    assert.equal(namespacedResponse.status, 200);
+
     const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
       requestInit: { headers: { Authorization: `Bearer ${await sign()}` } }
     });

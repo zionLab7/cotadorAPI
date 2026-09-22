@@ -9,8 +9,9 @@ const fs = require('fs');
 const config = require('../config');
 const { listarOperadoras, consultarPlanos, carregarCatalogo } = require('../catalogo');
 const { executarCotacao } = require('../cotador');
+const { oauthSecuritySchemes, requireToolAuthentication } = require('./oauth');
 
-function createMcpServer() {
+function createMcpServer({ requireOAuth = false } = {}) {
   const server = new McpServer({
     name: 'cotador-planos-saude-mcp',
     version: '1.0.0',
@@ -20,7 +21,12 @@ function createMcpServer() {
   // ChatGPT reads the OAuth policy from each tool descriptor when discovering
   // the MCP server. Keep the declaration per tool, as required by the plugin
   // contract, so the tools remain visible after an OAuth connection.
-  const oauthSecuritySchemes = [{ type: 'oauth2', scopes: ['cotador:use'] }];
+  const securitySchemes = oauthSecuritySchemes();
+  const authMeta = requireOAuth ? { securitySchemes } : undefined;
+
+  function authError(extra) {
+    return requireOAuth ? requireToolAuthentication(extra) : null;
+  }
 
   // 1. Tool: listar_operadoras
   server.registerTool(
@@ -28,9 +34,12 @@ function createMcpServer() {
     {
       description: 'Lista todas as 6 operadoras homologadas com quantidade de planos mapeados e linhas disponíveis.',
       inputSchema: {},
-      securitySchemes: oauthSecuritySchemes
+      securitySchemes,
+      _meta: authMeta
     },
-    async () => {
+    async (_args, extra) => {
+      const authenticationError = authError(extra);
+      if (authenticationError) return authenticationError;
       try {
         const operadoras = listarOperadoras();
         return {
@@ -55,16 +64,19 @@ function createMcpServer() {
     'consultar_catalogo',
     {
       description: 'Consulta e filtra o catálogo de 718 planos de saúde homologados (Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint).',
-      securitySchemes: oauthSecuritySchemes,
+      securitySchemes,
+      _meta: authMeta,
       inputSchema: {
-      operadora: z.string().optional().describe('Nome da operadora (ex: Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint)'),
-      acomodacao: z.enum(['apartamento', 'enfermaria']).optional().describe('Tipo de acomodação desejada'),
-      coparticipacao: z.boolean().optional().describe('true para planos com coparticipação, false para sem coparticipação'),
-      mei: z.boolean().optional().describe('true para filtrar planos compatíveis com MEI'),
-      busca: z.string().optional().describe('Termo de busca para pesquisar no nome do plano ou produto')
+        operadora: z.string().optional().describe('Nome da operadora (ex: Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint)'),
+        acomodacao: z.enum(['apartamento', 'enfermaria']).optional().describe('Tipo de acomodação desejada'),
+        coparticipacao: z.boolean().optional().describe('true para planos com coparticipação, false para sem coparticipação'),
+        mei: z.boolean().optional().describe('true para filtrar planos compatíveis com MEI'),
+        busca: z.string().optional().describe('Termo de busca para pesquisar no nome do plano ou produto')
       }
     },
-    async (args) => {
+    async (args, extra) => {
+      const authenticationError = authError(extra);
+      if (authenticationError) return authenticationError;
       try {
         const planos = consultarPlanos(args);
         return {
@@ -95,21 +107,24 @@ function createMcpServer() {
     'cotar_planos',
     {
       description: 'Executa a cotação automatizada no Painel do Corretor e retorna valores por faixa, total por plano, acomodação e coparticipação. Retorna o ID do PDF, sem link público.',
-      securitySchemes: oauthSecuritySchemes,
+      securitySchemes,
+      _meta: authMeta,
       inputSchema: {
-      titulo: z.string().optional().describe('Nome identificador da cotação (ex: "Cotação PME - Família Silva")'),
-      cidade: z.string().optional().describe('Cidade e UF da cotação (ex: "Guarulhos - SP", "São Paulo - SP")'),
-      modalidade: z.number().int().optional().describe('Modalidade: 2 para Saúde PME (padrão), 1 para Individual/Familiar, 3 para Coletivo Adesão'),
-      vidas: z.array(
-        z.object({
-          faixa: z.string().describe('Faixa etária ANS (ex: "00-18", "19-23", "24-28", "29-33", "34-38", "39-43", "44-48", "49-53", "54-58", "59+")'),
-          quantidade: z.number().int().min(1).describe('Número de pessoas nesta faixa')
-        })
-      ).min(1).describe('Lista de pessoas agrupadas por faixa etária'),
-      operadoras: z.array(z.string()).optional().describe('Lista opcional de operadoras para cotar (ex: ["Amil", "Bradesco Seguros"]). Se omitido, cota todas as disponíveis.')
+        titulo: z.string().optional().describe('Nome identificador da cotação (ex: "Cotação PME - Família Silva")'),
+        cidade: z.string().optional().describe('Cidade e UF da cotação (ex: "Guarulhos - SP", "São Paulo - SP")'),
+        modalidade: z.number().int().optional().describe('Modalidade: 2 para Saúde PME (padrão), 1 para Individual/Familiar, 3 para Coletivo Adesão'),
+        vidas: z.array(
+          z.object({
+            faixa: z.string().describe('Faixa etária ANS (ex: "00-18", "19-23", "24-28", "29-33", "34-38", "39-43", "44-48", "49-53", "54-58", "59+")'),
+            quantidade: z.number().int().min(1).describe('Número de pessoas nesta faixa')
+          })
+        ).min(1).describe('Lista de pessoas agrupadas por faixa etária'),
+        operadoras: z.array(z.string()).optional().describe('Lista opcional de operadoras para cotar (ex: ["Amil", "Bradesco Seguros"]). Se omitido, cota todas as disponíveis.')
       }
     },
-    async (args) => {
+    async (args, extra) => {
+      const authenticationError = authError(extra);
+      if (authenticationError) return authenticationError;
       try {
         const resultado = await executarCotacao({
           titulo: args.titulo || 'Cotação via Agente IA (MCP)',
@@ -153,9 +168,12 @@ function createMcpServer() {
     {
       description: 'Verifica a saúde da API do cotador, integridade da sessão no Painel do Corretor e total de planos cadastrados.',
       inputSchema: {},
-      securitySchemes: oauthSecuritySchemes
+      securitySchemes,
+      _meta: authMeta
     },
-    async () => {
+    async (_args, extra) => {
+      const authenticationError = authError(extra);
+      if (authenticationError) return authenticationError;
       try {
         const sessionExists = fs.existsSync(config.STORAGE_STATE_PATH);
         const catalogo = carregarCatalogo();
@@ -183,34 +201,58 @@ function createMcpServer() {
     }
   );
 
-  // Resources
-  server.resource(
-    'catalogo-planos',
-    'catalogo://planos',
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          text: JSON.stringify(carregarCatalogo(), null, 2),
-          mimeType: 'application/json'
-        }
-      ]
-    })
-  );
+  // Legacy SSE/STDIO clients already authenticate before connecting. The
+  // public HTTP discovery endpoint exposes only OAuth-protected tools, avoiding
+  // anonymous access to the full catalog through MCP resources.
+  if (!requireOAuth) {
+    server.resource(
+      'catalogo-planos',
+      'catalogo://planos',
+      async (uri) => ({
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(carregarCatalogo(), null, 2),
+            mimeType: 'application/json'
+          }
+        ]
+      })
+    );
 
-  server.resource(
-    'catalogo-operadoras',
-    'catalogo://operadoras',
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          text: JSON.stringify(listarOperadoras(), null, 2),
-          mimeType: 'application/json'
-        }
-      ]
-    })
-  );
+    server.resource(
+      'catalogo-operadoras',
+      'catalogo://operadoras',
+      async (uri) => ({
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(listarOperadoras(), null, 2),
+            mimeType: 'application/json'
+          }
+        ]
+      })
+    );
+  }
+
+  if (requireOAuth) {
+    // @modelcontextprotocol/sdk 1.30.0 accepts registerTool securitySchemes in
+    // application code but does not serialize it. Wrap tools/list so ChatGPT
+    // receives the required top-level field while retaining SDK validation and
+    // dispatch for tool calls. Keep the _meta copy for older clients.
+    const listToolsHandler = server.server._requestHandlers.get('tools/list');
+    if (!listToolsHandler) throw new Error('Handler tools/list não registrado');
+    server.server._requestHandlers.set('tools/list', async (request, extra) => {
+      const result = await listToolsHandler(request, extra);
+      return {
+        ...result,
+        tools: result.tools.map(tool => ({
+          ...tool,
+          securitySchemes,
+          _meta: { ...(tool._meta || {}), securitySchemes }
+        }))
+      };
+    });
+  }
 
   return server;
 }

@@ -11,7 +11,7 @@ const config = require('./config');
 const { executarCotacao } = require('./cotador');
 const { listarOperadoras, consultarPlanos, carregarCatalogo } = require('./catalogo');
 const { login, isSessionValid } = require('./auth');
-const { chromium } = require('playwright-core');
+const { launchBrowser } = require('./browser');
 
 const app = express();
 
@@ -127,14 +127,7 @@ app.get('/api/cotacao/:id/pdf', (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const launchOptions = {
-      headless: config.HEADLESS,
-      args: ['--no-sandbox', '--disable-dev-shm-usage']
-    };
-    if (config.CHROME_CHANNEL) {
-      launchOptions.channel = config.CHROME_CHANNEL;
-    }
-    const browser = await chromium.launch(launchOptions);
+    const browser = await launchBrowser();
 
     const result = await login(browser, email, password);
     await browser.close();

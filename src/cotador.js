@@ -3,12 +3,12 @@
  * Realiza o preenchimento, seleção de planos, extração de dados e geração do PDF
  */
 
-const { chromium } = require('playwright-core');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const { getAuthenticatedContext } = require('./auth');
 const { parseQuotationHtml } = require('./parser');
+const { launchBrowser } = require('./browser');
 
 const FAIXA_INDEX_MAP = {
   '00-18': 0, '0-18': 0, '00 a 18': 0,
@@ -43,15 +43,7 @@ async function executarCotacao(params = {}) {
 
   console.log(`\n[COTADOR] Iniciando cotação: "${titulo}" | Vidas: ${vidas.length} faixas`);
 
-  const launchOptions = {
-    headless: config.HEADLESS,
-    args: ['--start-maximized', '--no-sandbox', '--disable-dev-shm-usage']
-  };
-  if (config.CHROME_CHANNEL) {
-    launchOptions.channel = config.CHROME_CHANNEL;
-  }
-
-  const browser = await chromium.launch(launchOptions);
+  const browser = await launchBrowser(['--start-maximized']);
 
   let context;
   try {

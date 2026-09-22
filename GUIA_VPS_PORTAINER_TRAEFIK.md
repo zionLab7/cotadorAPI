@@ -64,7 +64,7 @@ services:
       - cotador_pdfs:/app/public/pdfs
       # Mapeia os arquivos do projeto da sua VPS para dentro do container
       - /opt/cotador-api:/app
-    command: sh -c "npm install --only=production && node src/server.js"
+    command: sh -c "npm install --only=production && npx playwright install chromium && node src/server.js"
     networks:
       - traefik_public
     labels:

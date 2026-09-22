@@ -6,6 +6,7 @@ WORKDIR /app
 # Copia manifestos e instala dependências de produção
 COPY package*.json ./
 RUN npm install --only=production
+RUN npx playwright install chromium
 
 # Copia código fonte e catálogo de planos mapeados
 COPY src ./src

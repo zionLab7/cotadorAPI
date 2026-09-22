@@ -32,8 +32,14 @@ function createMcpServer({ requireOAuth = false } = {}) {
   server.registerTool(
     'listar_operadoras',
     {
-      description: 'Lista todas as 6 operadoras homologadas com quantidade de planos mapeados e linhas disponíveis.',
+      title: 'Listar operadoras',
+      description: 'Use esta ferramenta quando o usuário quiser listar as operadoras de planos de saúde disponíveis no Cotador All Cubo.',
       inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false
+      },
       securitySchemes,
       _meta: authMeta
     },
@@ -63,9 +69,15 @@ function createMcpServer({ requireOAuth = false } = {}) {
   server.registerTool(
     'consultar_catalogo',
     {
-      description: 'Consulta e filtra o catálogo de 718 planos de saúde homologados (Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint).',
+      title: 'Consultar catálogo de planos',
+      description: 'Use esta ferramenta quando o usuário quiser pesquisar ou filtrar planos de saúde homologados por operadora, acomodação, coparticipação, compatibilidade com MEI ou texto.',
       securitySchemes,
       _meta: authMeta,
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false
+      },
       inputSchema: {
         operadora: z.string().optional().describe('Nome da operadora (ex: Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint)'),
         acomodacao: z.enum(['apartamento', 'enfermaria']).optional().describe('Tipo de acomodação desejada'),
@@ -106,9 +118,16 @@ function createMcpServer({ requireOAuth = false } = {}) {
   server.registerTool(
     'cotar_planos',
     {
-      description: 'Executa a cotação automatizada no Painel do Corretor e retorna valores por faixa, total por plano, acomodação e coparticipação. Retorna o ID do PDF, sem link público.',
+      title: 'Cotar planos de saúde',
+      description: 'Use esta ferramenta quando o usuário fornecer as faixas etárias e quiser executar uma nova cotação de planos de saúde no Painel do Corretor. Retorna valores e o ID do PDF gerado.',
       securitySchemes,
       _meta: authMeta,
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: false,
+        idempotentHint: false
+      },
       inputSchema: {
         titulo: z.string().optional().describe('Nome identificador da cotação (ex: "Cotação PME - Família Silva")'),
         cidade: z.string().optional().describe('Cidade e UF da cotação (ex: "Guarulhos - SP", "São Paulo - SP")'),
@@ -166,8 +185,14 @@ function createMcpServer({ requireOAuth = false } = {}) {
   server.registerTool(
     'verificar_status_cotador',
     {
-      description: 'Verifica a saúde da API do cotador, integridade da sessão no Painel do Corretor e total de planos cadastrados.',
+      title: 'Verificar status do cotador',
+      description: 'Use esta ferramenta quando o usuário quiser verificar se o Cotador All Cubo está online e se a sessão e o catálogo estão disponíveis.',
       inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false
+      },
       securitySchemes,
       _meta: authMeta
     },

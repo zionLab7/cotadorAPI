@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "all-cubo-cotador",
+  "version": "0.1.0",
+  "description": "Consulta o catálogo e gera cotações de planos de saúde da All Cubo.",
+  "author": { "name": "All Cubo" },
+  "repository": "https://github.com/zionLab7/cotadorAPI",
+  "keywords": ["planos de saúde", "cotação", "All Cubo"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "All Cubo Cotador",
+        "shortDescription": "Consulte planos e gere cotações da All Cubo.",
+        "longDescription": "Consulta operadoras e planos disponíveis e gera cotações com preços obtidos pelo cotador da All Cubo.",
+        "developerName": "All Cubo",
+        "category": "Business",
+        "capabilities": ["Read", "Write"],
+        "defaultPrompt": [
+          "Liste as operadoras disponíveis para cotação.",
+          "Faça uma cotação PME em Guarulhos para pessoas de 32 e 47 anos."
+        ]
+      }
+    }
+  }
+}

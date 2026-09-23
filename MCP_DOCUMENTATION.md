@@ -2,6 +2,8 @@
 
 O **Servidor MCP de Cotação de Planos de Saúde** expõe todo o motor de automação e o catálogo de 718 planos de saúde como **Tools (Ferramentas)** e **Resources (Recursos)** para Agentes de Inteligência Artificial (**Claude Desktop**, **Cursor IDE**, **N8N AI Agents**, **LangChain**, **Flowise**, **Dify**, etc.).
 
+Para usar o ChatGPT com o endpoint Streamable HTTP `/mcp` e OAuth por usuário, consulte [PLUGIN_SETUP.md](PLUGIN_SETUP.md). Este guia descreve os transportes legados SSE e STDIO. A ferramenta `cotar_planos` retorna o identificador do PDF, sem URL com segredo.
+
 A API REST tradicional continua operando normalmente na porta 3000, e o servidor MCP funciona em modo **híbrido**:
 1. **SSE Remoto (Server-Sent Events)**: Atende agentes remotos na VPS via HTTP/HTTPS em `/mcp/sse`.
 2. **STDIO Local**: Atende agentes locais (Claude Desktop, Cursor no computador) via linha de comando (`npm run mcp`).
@@ -21,7 +23,7 @@ Executa cotação completa no Painel do Corretor, preenchendo o formulário com 
   - `modalidade` *(opcional)*: `2` para PME (padrão), `1` para Individual, `3` para Adesão.
   - `operadoras` *(opcional)*: Lista de operadoras para filtrar (ex: `["Amil", "Bradesco Seguros"]`). Se omitido, cota planos de todas as 6 operadoras.
 - **Retorno**:
-  - Tabela consolidada com preços por faixa etária, valor total por plano, acomodação, coparticipação e link para download do PDF oficial.
+  - Tabela consolidada com preços por faixa etária, valor total por plano, acomodação, coparticipação e ID do PDF gerado.
 
 ### 2. `consultar_catalogo`
 Consulta a base mapeada de 718 planos de saúde com filtros rápidos.
@@ -70,7 +72,7 @@ Para que o aplicativo **Claude Desktop** possa cotar planos de saúde diretament
            "/CAMINHO_ABSOLUTO_DO_PROJETO/src/mcp/stdio.js"
          ],
          "env": {
-           "PAINEL_USER": "jefferson@allcc.com.br",
+           "PAINEL_USER": "corretor@example.com",
            "PAINEL_PASSWORD": "sua_senha_do_painel",
            "HEADLESS": "true"
          }
@@ -152,7 +154,7 @@ asyncio.run(main())
 
 Depois de conectado ao Claude Desktop, Cursor ou N8N, você pode simplesmente conversar em linguagem natural com a IA:
 
-> *"Cote para mim planos de saúde PME em Guarulhos para 3 pessoas: uma de 26 anos, uma de 35 anos e outra de 52 anos. Filtre apenas Amil e Bradesco Seguros com acomodação em apartamento. No final, me dê os valores e o link do PDF."*
+> *"Cote para mim planos de saúde PME em Guarulhos para 3 pessoas: uma de 26 anos, uma de 35 anos e outra de 52 anos. Filtre apenas Amil e Bradesco Seguros. No final, me dê os valores."*
 
 O agente de IA automaticamente:
 1. Chamará a tool `cotar_planos` com:
@@ -161,4 +163,4 @@ O agente de IA automaticamente:
    - `vidas`: `[{"faixa": "24-28", "quantidade": 1}, {"faixa": "34-38", "quantidade": 1}, {"faixa": "49-53", "quantidade": 1}]`
    - `operadoras`: `["Amil", "Bradesco Seguros"]`
 2. Interpretará a resposta JSON com os valores totais e faixas.
-3. Apresentará um resumo formatado para o usuário e entregará o link oficial do PDF!
+3. Apresentará um resumo formatado e o identificador do PDF gerado, sem expor o token da API.

@@ -9,20 +9,43 @@ const fs = require('fs');
 const config = require('../config');
 const { listarOperadoras, consultarPlanos, carregarCatalogo } = require('../catalogo');
 const { executarCotacao } = require('../cotador');
+const { oauthSecuritySchemes, requireToolAuthentication } = require('./oauth');
 
-function createMcpServer() {
+function createMcpServer({ requireOAuth = false } = {}) {
   const server = new McpServer({
     name: 'cotador-planos-saude-mcp',
     version: '1.0.0',
     description: 'Servidor MCP para automação e cotação de planos de saúde no Painel do Corretor (Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint)'
   });
 
+  // ChatGPT reads the OAuth policy from each tool descriptor when discovering
+  // the MCP server. Keep the declaration per tool, as required by the plugin
+  // contract, so the tools remain visible after an OAuth connection.
+  const securitySchemes = oauthSecuritySchemes();
+  const authMeta = requireOAuth ? { securitySchemes } : undefined;
+
+  function authError(extra) {
+    return requireOAuth ? requireToolAuthentication(extra) : null;
+  }
+
   // 1. Tool: listar_operadoras
-  server.tool(
+  server.registerTool(
     'listar_operadoras',
-    'Lista todas as 6 operadoras homologadas com quantidade de planos mapeados e linhas disponíveis.',
-    {},
-    async () => {
+    {
+      title: 'Listar operadoras',
+      description: 'Use esta ferramenta quando o usuário quiser listar as operadoras de planos de saúde disponíveis no Cotador All Cubo.',
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false
+      },
+      securitySchemes,
+      _meta: authMeta
+    },
+    async (_args, extra) => {
+      const authenticationError = authError(extra);
+      if (authenticationError) return authenticationError;
       try {
         const operadoras = listarOperadoras();
         return {
@@ -43,17 +66,29 @@ function createMcpServer() {
   );
 
   // 2. Tool: consultar_catalogo
-  server.tool(
+  server.registerTool(
     'consultar_catalogo',
-    'Consulta e filtra o catálogo de 718 planos de saúde homologados (Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint).',
     {
-      operadora: z.string().optional().describe('Nome da operadora (ex: Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint)'),
-      acomodacao: z.enum(['apartamento', 'enfermaria']).optional().describe('Tipo de acomodação desejada'),
-      coparticipacao: z.boolean().optional().describe('true para planos com coparticipação, false para sem coparticipação'),
-      mei: z.boolean().optional().describe('true para filtrar planos compatíveis com MEI'),
-      busca: z.string().optional().describe('Termo de busca para pesquisar no nome do plano ou produto')
+      title: 'Consultar catálogo de planos',
+      description: 'Use esta ferramenta quando o usuário quiser pesquisar ou filtrar planos de saúde homologados por operadora, acomodação, coparticipação, compatibilidade com MEI ou texto.',
+      securitySchemes,
+      _meta: authMeta,
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false
+      },
+      inputSchema: {
+        operadora: z.string().optional().describe('Nome da operadora (ex: Amil, Bradesco Seguros, SulAmérica, Porto Seguro, Alice, Omint)'),
+        acomodacao: z.enum(['apartamento', 'enfermaria']).optional().describe('Tipo de acomodação desejada'),
+        coparticipacao: z.boolean().optional().describe('true para planos com coparticipação, false para sem coparticipação'),
+        mei: z.boolean().optional().describe('true para filtrar planos compatíveis com MEI'),
+        busca: z.string().optional().describe('Termo de busca para pesquisar no nome do plano ou produto')
+      }
     },
-    async (args) => {
+    async (args, extra) => {
+      const authenticationError = authError(extra);
+      if (authenticationError) return authenticationError;
       try {
         const planos = consultarPlanos(args);
         return {
@@ -80,22 +115,35 @@ function createMcpServer() {
   );
 
   // 3. Tool: cotar_planos
-  server.tool(
+  server.registerTool(
     'cotar_planos',
-    'Executa a cotação automatizada no Painel do Corretor, seleciona planos e extrai a tabela completa de valores por faixa etária, valor total por plano, acomodação, coparticipação e link para download do PDF oficial.',
     {
-      titulo: z.string().optional().describe('Nome identificador da cotação (ex: "Cotação PME - Família Silva")'),
-      cidade: z.string().optional().describe('Cidade e UF da cotação (ex: "Guarulhos - SP", "São Paulo - SP")'),
-      modalidade: z.number().int().optional().describe('Modalidade: 2 para Saúde PME (padrão), 1 para Individual/Familiar, 3 para Coletivo Adesão'),
-      vidas: z.array(
-        z.object({
-          faixa: z.string().describe('Faixa etária ANS (ex: "00-18", "19-23", "24-28", "29-33", "34-38", "39-43", "44-48", "49-53", "54-58", "59+")'),
-          quantidade: z.number().int().min(1).describe('Número de pessoas nesta faixa')
-        })
-      ).min(1).describe('Lista de pessoas agrupadas por faixa etária'),
-      operadoras: z.array(z.string()).optional().describe('Lista opcional de operadoras para cotar (ex: ["Amil", "Bradesco Seguros"]). Se omitido, cota todas as disponíveis.')
+      title: 'Cotar planos de saúde',
+      description: 'Use esta ferramenta quando o usuário fornecer as faixas etárias e quiser executar uma nova cotação de planos de saúde no Painel do Corretor. Retorna valores e o ID do PDF gerado.',
+      securitySchemes,
+      _meta: authMeta,
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false,
+        destructiveHint: false,
+        idempotentHint: false
+      },
+      inputSchema: {
+        titulo: z.string().optional().describe('Nome identificador da cotação (ex: "Cotação PME - Família Silva")'),
+        cidade: z.string().optional().describe('Cidade e UF da cotação (ex: "Guarulhos - SP", "São Paulo - SP")'),
+        modalidade: z.number().int().optional().describe('Modalidade: 2 para Saúde PME (padrão), 1 para Individual/Familiar, 3 para Coletivo Adesão'),
+        vidas: z.array(
+          z.object({
+            faixa: z.string().describe('Faixa etária ANS (ex: "00-18", "19-23", "24-28", "29-33", "34-38", "39-43", "44-48", "49-53", "54-58", "59+")'),
+            quantidade: z.number().int().min(1).describe('Número de pessoas nesta faixa')
+          })
+        ).min(1).describe('Lista de pessoas agrupadas por faixa etária'),
+        operadoras: z.array(z.string()).optional().describe('Lista opcional de operadoras para cotar (ex: ["Amil", "Bradesco Seguros"]). Se omitido, cota todas as disponíveis.')
+      }
     },
-    async (args) => {
+    async (args, extra) => {
+      const authenticationError = authError(extra);
+      if (authenticationError) return authenticationError;
       try {
         const resultado = await executarCotacao({
           titulo: args.titulo || 'Cotação via Agente IA (MCP)',
@@ -104,10 +152,6 @@ function createMcpServer() {
           vidas: args.vidas,
           operadoras: args.operadoras
         });
-
-        // Adiciona token ao link do PDF se configurado
-        const tokenQuery = config.API_SECRET_TOKEN ? `?token=${config.API_SECRET_TOKEN}` : '';
-        const pdfLink = `${resultado.pdf.urlDownload}${tokenQuery}`;
 
         return {
           content: [
@@ -119,9 +163,10 @@ function createMcpServer() {
                 titulo: resultado.titulo,
                 totalPlanos: resultado.totalPlanos,
                 planos: resultado.planos,
+                resumoHospitais: resultado.resumoHospitais,
                 pdf: {
-                  arquivo: resultado.pdf.arquivo,
-                  urlDownload: pdfLink
+                  nomeArquivo: resultado.pdf.nomeArquivo,
+                  disponivel: fs.existsSync(resultado.pdf.caminhoLocal)
                 }
               }, null, 2)
             }
@@ -130,18 +175,30 @@ function createMcpServer() {
       } catch (err) {
         return {
           isError: true,
-          content: [{ type: 'text', text: `Erro ao executar cotação: ${err.message}` }]
+          content: [{ type: 'text', text: 'Não foi possível executar a cotação. Consulte os logs do servidor.' }]
         };
       }
     }
   );
 
   // 4. Tool: verificar_status_cotador
-  server.tool(
+  server.registerTool(
     'verificar_status_cotador',
-    'Verifica a saúde da API do cotador, integridade da sessão no Painel do Corretor e total de planos cadastrados.',
-    {},
-    async () => {
+    {
+      title: 'Verificar status do cotador',
+      description: 'Use esta ferramenta quando o usuário quiser verificar se o Cotador All Cubo está online e se a sessão e o catálogo estão disponíveis.',
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false,
+        destructiveHint: false
+      },
+      securitySchemes,
+      _meta: authMeta
+    },
+    async (_args, extra) => {
+      const authenticationError = authError(extra);
+      if (authenticationError) return authenticationError;
       try {
         const sessionExists = fs.existsSync(config.STORAGE_STATE_PATH);
         const catalogo = carregarCatalogo();
@@ -154,7 +211,6 @@ function createMcpServer() {
               text: JSON.stringify({
                 status: 'online',
                 sessaoPainelAtiva: sessionExists,
-                autenticacaoApiAtiva: Boolean(config.API_SECRET_TOKEN),
                 totalOperadoras: Object.keys(catalogo).length,
                 totalPlanos: totalPlanosMapeados
               }, null, 2)
@@ -170,34 +226,58 @@ function createMcpServer() {
     }
   );
 
-  // Resources
-  server.resource(
-    'catalogo-planos',
-    'catalogo://planos',
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          text: JSON.stringify(carregarCatalogo(), null, 2),
-          mimeType: 'application/json'
-        }
-      ]
-    })
-  );
+  // Legacy SSE/STDIO clients already authenticate before connecting. The
+  // public HTTP discovery endpoint exposes only OAuth-protected tools, avoiding
+  // anonymous access to the full catalog through MCP resources.
+  if (!requireOAuth) {
+    server.resource(
+      'catalogo-planos',
+      'catalogo://planos',
+      async (uri) => ({
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(carregarCatalogo(), null, 2),
+            mimeType: 'application/json'
+          }
+        ]
+      })
+    );
 
-  server.resource(
-    'catalogo-operadoras',
-    'catalogo://operadoras',
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          text: JSON.stringify(listarOperadoras(), null, 2),
-          mimeType: 'application/json'
-        }
-      ]
-    })
-  );
+    server.resource(
+      'catalogo-operadoras',
+      'catalogo://operadoras',
+      async (uri) => ({
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(listarOperadoras(), null, 2),
+            mimeType: 'application/json'
+          }
+        ]
+      })
+    );
+  }
+
+  if (requireOAuth) {
+    // @modelcontextprotocol/sdk 1.30.0 accepts registerTool securitySchemes in
+    // application code but does not serialize it. Wrap tools/list so ChatGPT
+    // receives the required top-level field while retaining SDK validation and
+    // dispatch for tool calls. Keep the _meta copy for older clients.
+    const listToolsHandler = server.server._requestHandlers.get('tools/list');
+    if (!listToolsHandler) throw new Error('Handler tools/list não registrado');
+    server.server._requestHandlers.set('tools/list', async (request, extra) => {
+      const result = await listToolsHandler(request, extra);
+      return {
+        ...result,
+        tools: result.tools.map(tool => ({
+          ...tool,
+          securitySchemes,
+          _meta: { ...(tool._meta || {}), securitySchemes }
+        }))
+      };
+    });
+  }
 
   return server;
 }

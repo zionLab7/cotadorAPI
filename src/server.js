@@ -14,6 +14,8 @@ const { login, isSessionValid } = require('./auth');
 const { launchBrowser } = require('./browser');
 const { autenticarApiKey } = require('./middleware');
 const { createMcpRouter } = require('./mcp/sse');
+const { createHttpMcpRouter } = require('./mcp/http');
+const { metadata, authenticateMcp } = require('./mcp/oauth');
 
 const app = express();
 
@@ -22,6 +24,9 @@ app.use(express.json());
 
 // Servidor MCP (Model Context Protocol) via SSE para Agentes de IA
 app.use('/mcp', createMcpRouter(autenticarApiKey));
+app.get('/.well-known/oauth-protected-resource', metadata);
+app.get('/.well-known/oauth-protected-resource/mcp', metadata);
+app.use('/mcp', createHttpMcpRouter(authenticateMcp));
 
 // Rota de Healthcheck e Status (pública)
 app.get('/api/status', async (req, res) => {
@@ -161,6 +166,7 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`- Cotar:      POST http://localhost:${PORT}/api/cotacao`);
     console.log(`- Baixar PDF: GET  http://localhost:${PORT}/api/cotacao/:id/pdf`);
     console.log(`- MCP SSE:    GET  http://localhost:${PORT}/mcp/sse`);
+    console.log(`- MCP HTTP:   POST http://localhost:${PORT}/mcp (OAuth)`);
     console.log('=====================================================\n');
   });
 }

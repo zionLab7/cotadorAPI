@@ -14,11 +14,35 @@ const { login, isSessionValid } = require('./auth');
 const { launchBrowser } = require('./browser');
 const { autenticarApiKey } = require('./middleware');
 const { createMcpRouter } = require('./mcp/sse');
+const swaggerUi = require('swagger-ui-express');
+const { swaggerSpec } = require('./swagger');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Documentação Interativa Swagger / OpenAPI 3.0
+const swaggerUiOptions = {
+  customSiteTitle: 'Swagger UI - API Cotador de Planos de Saúde',
+  customCss: `
+    .swagger-ui .topbar { background-color: #0b2545; }
+    .swagger-ui .info .title { color: #0b2545; }
+    .swagger-ui .btn.authorize { background-color: #00a86b; color: white; border-color: #00a86b; }
+    .swagger-ui .btn.authorize svg { fill: white; }
+  `,
+  swaggerOptions: {
+    persistAuthorization: true,
+    displayRequestDuration: true,
+    docExpansion: 'list',
+    filter: true
+  }
+};
+
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+app.get('/api/docs/swagger.json', (req, res) => res.json(swaggerSpec));
+app.get('/swagger', (req, res) => res.redirect('/docs'));
+app.get('/api-docs', (req, res) => res.redirect('/docs'));
 
 // Servidor MCP (Model Context Protocol) via SSE para Agentes de IA
 app.use('/mcp', createMcpRouter(autenticarApiKey));
@@ -33,6 +57,8 @@ app.get('/api/status', async (req, res) => {
     status: 'online',
     servico: 'API Própria - Cotação de Planos de Saúde (Painel do Corretor)',
     versao: '1.0.0',
+    documentacaoSwagger: '/docs',
+    especificacaoOpenApi: '/api/docs/swagger.json',
     autenticacaoAtiva: Boolean(config.API_SECRET_TOKEN),
     servidorMcpAtivo: true,
     sessaoAtiva: sessionExists,
@@ -160,7 +186,8 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`- Catálogo:   GET  http://localhost:${PORT}/api/catalogo`);
     console.log(`- Cotar:      POST http://localhost:${PORT}/api/cotacao`);
     console.log(`- Baixar PDF: GET  http://localhost:${PORT}/api/cotacao/:id/pdf`);
-    console.log(`- MCP SSE:    GET  http://localhost:${PORT}/mcp/sse`);
+    console.log(`- Swagger UI: GET  http://localhost:${PORT}/docs`);
+    console.log(`- OpenAPI JSON:    http://localhost:${PORT}/api/docs/swagger.json`);
     console.log('=====================================================\n');
   });
 }

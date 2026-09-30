@@ -20,6 +20,7 @@
     "express": "^5.2.1",
     "playwright": "^1.63.0",
     "playwright-core": "^1.63.0",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^4.6.5"
   }
 }

@@ -40,7 +40,16 @@ npm start
 ```
 A API estará pronta em: `http://localhost:3000`
 
-### 3. Rodar Testes
+### 3. Acessar a Documentação Interativa (Swagger UI)
+Abra no seu navegador:
+👉 **`http://localhost:3000/docs`** (ou `https://cotador.seudominio.com.br/docs`)
+
+- Visualize todas as rotas, esquemas de requisição e regras da ANS.
+- Clique no botão **Authorize 🔒** para autenticar com seu `API_SECRET_TOKEN`.
+- Teste cotações e consultas em tempo real com o botão **Try it out**.
+- Especificação JSON para importação no Postman/Insomnia: `http://localhost:3000/api/docs/swagger.json`.
+
+### 4. Rodar Testes
 ```bash
 npm test
 ```

@@ -2,6 +2,12 @@
 
 Esta API permite que sistemas externos (**Chatbots**, **WhatsApp / Evolution API**, **Typebot**, **CRMs**, **N8N / Make**) realizem cotações automáticas e consultem o catálogo de planos de saúde integrado ao **Painel do Corretor** (`beta.paineldocorretor.com.br`).
 
+> [!TIP]
+> 🚀 **Documentação Interativa (Swagger UI)**:  
+> Você pode testar e explorar todos os endpoints diretamente pelo navegador acessando:  
+> 👉 **`http://localhost:3000/docs`** (ou `https://cotador.suacorretora.com.br/docs`)  
+> Utilize o botão **Authorize 🔒** no topo direito para inserir seu `API_SECRET_TOKEN` e executar testes com o botão **Try it out**!
+
 ---
 
 ## 📌 Sumário

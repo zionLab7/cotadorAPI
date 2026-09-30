@@ -111,8 +111,31 @@ server.listen(TEST_PORT, async () => {
       throw new Error('Esperava 404 para PDF inexistente');
     }
 
+    // 7. Testa documentação Swagger / OpenAPI 3.0
+    console.log('\n7. Testando documentação Swagger UI e especificação OpenAPI...');
+    const swaggerHtmlRes = await fetch(`http://localhost:${TEST_PORT}/docs/`);
+    console.log('   Status HTTP /docs/:', swaggerHtmlRes.status);
+    const swaggerHtml = await swaggerHtmlRes.text();
+    if (swaggerHtmlRes.status !== 200 || !swaggerHtml.includes('swagger-ui')) {
+      throw new Error('Swagger UI HTML não foi carregado corretamente em /docs/');
+    }
+
+    const openApiRes = await fetchJson('/api/docs/swagger.json');
+    console.log('   Status HTTP /api/docs/swagger.json:', openApiRes.status);
+    console.log('   Versão OpenAPI:', openApiRes.data.openapi);
+    console.log('   Total de rotas documentadas:', Object.keys(openApiRes.data.paths).length);
+    if (openApiRes.status !== 200 || openApiRes.data.openapi !== '3.0.3' || !openApiRes.data.paths['/api/cotacao']) {
+      throw new Error('Especificação OpenAPI JSON inválida ou incompleta');
+    }
+
+    const redirectRes = await fetch(`http://localhost:${TEST_PORT}/swagger`, { redirect: 'manual' });
+    console.log('   Status HTTP /swagger (redirecionamento):', redirectRes.status);
+    if (redirectRes.status !== 302) {
+      throw new Error('Esperava redirecionamento 302 de /swagger para /docs');
+    }
+
     console.log('\n=====================================================');
-    console.log('🎉 TODOS OS TESTES (INCLUINDO AUTENTICAÇÃO POR TOKEN) APROVADOS!');
+    console.log('🎉 TODOS OS TESTES (API REST, TOKEN E SWAGGER) APROVADOS!');
     console.log('=====================================================\n');
   } catch (err) {
     console.error('❌ ERRO NO TESTE:', err.message);
